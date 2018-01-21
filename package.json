@@ -1,8 +1,8 @@
 {
   "name": "redux-combiner",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Convenient reducers combiner for Redux",
-  "main": "index.js",
+  "main": "dest/combiner.js",
   "scripts": {
     "test": "mocha --recursive --require babel-register test",
     "lint": "eslint src",
