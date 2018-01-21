@@ -1,0 +1,13 @@
+{
+    "presets": [ "env", "flow" ],
+    "env": {
+        "test": {
+            "plugins": [ "istanbul" ]
+        }
+    },
+    "plugins": [
+        "transform-runtime",
+        "add-module-exports",
+        "transform-object-rest-spread"
+    ]
+}

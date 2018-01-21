@@ -1,0 +1,8 @@
+{
+    "reporter": [
+      "lcov",
+      "text-summary"
+    ],
+    "sourceMap": false,
+    "instrument": false
+}
