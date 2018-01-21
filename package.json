@@ -8,7 +8,8 @@
     "lint": "eslint src",
     "flow": "flow",
     "cover": "cross-env NODE_ENV=test nyc npm test",
-    "compile": "babel --out-dir dest src"
+    "compile": "babel --out-dir dest src",
+    "prepare": "npm run compile"
   },
   "keywords": [
     "redux",
@@ -37,5 +38,8 @@
   "dependencies": {
     "babel-plugin-add-module-exports": "^0.2.1",
     "babel-runtime": "^6.26.0"
-  }
+  },
+  "files": [
+    "dst/combiner.js"
+  ]
 }
