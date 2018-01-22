@@ -1,6 +1,6 @@
 {
   "name": "redux-combiner",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Convenient reducers combiner for Redux",
   "main": "dest/combiner.js",
   "scripts": {
@@ -10,6 +10,10 @@
     "cover": "cross-env NODE_ENV=test nyc npm test",
     "compile": "babel --out-dir dest src",
     "prepare": "npm run compile"
+  },
+  "repository": {
+      "type": "git",
+      "url": "git+https://github.com/rmdm/redux-combiner.git"
   },
   "keywords": [
     "redux",

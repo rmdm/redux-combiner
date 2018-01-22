@@ -4,7 +4,7 @@ export function node (initial) {
 
     checkInitial(initial, node)
 
-    const reducersPaths = getReducerPaths(initial)
+    const reducersPaths = getReducersPaths(initial)
 
     const fn = function (state = getDefault(initial), action) {
 
@@ -24,9 +24,7 @@ export function each (initial, schema, options) {
 
     checkInitial(initial, each)
 
-    if (!isObject(options)) { options = {} }
-
-    const reducersPaths = getReducerPaths(schema)
+    const reducersPaths = getReducersPaths(schema)
 
     const getChildKey = createActionKeyGetter(options)
 
@@ -69,7 +67,7 @@ function getDefault (initial) {
     return initial
 }
 
-function getReducerPaths (reducer, reducersPaths = [], path = []) {
+function getReducersPaths (reducer, reducersPaths = [], path = []) {
 
     if (isFunction(reducer)) {
         reducersPaths.push({ path, reducer })
@@ -78,7 +76,7 @@ function getReducerPaths (reducer, reducersPaths = [], path = []) {
     if (isObject(reducer)) {
         for (let k in reducer) {
             if (reducer.hasOwnProperty(k)) {
-                getReducerPaths(reducer[k], reducersPaths, path.concat(k))
+                getReducersPaths(reducer[k], reducersPaths, path.concat(k))
             }
         }
     }
@@ -127,11 +125,12 @@ function applyChildInnerReducers (state, action, reducersPaths, getChildKey) {
 
     const childKey = getChildKey(state, action)
 
-    if (typeof childKey === 'undefined') {
+    if (typeof childKey === 'undefined' || !state.hasOwnProperty(childKey)) {
         return state
     }
 
     const child = state[childKey]
+
     const newChild = applyInnerReducers(child, action, reducersPaths)
 
     if (child !== newChild) {
@@ -141,9 +140,11 @@ function applyChildInnerReducers (state, action, reducersPaths, getChildKey) {
     return state
 }
 
-function createActionKeyGetter (options) {
+function createActionKeyGetter ({ actionKey, getKey } = {}) {
 
-    let { actionKey } = options
+    if (isFunction(getKey)) {
+        return getKey
+    }
 
     if (!actionKey) {
         return getDefaultActionKey

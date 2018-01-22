@@ -345,6 +345,37 @@ describe('redux-combiner', function () {
             })
         })
 
+        it('specifies custom function to get entity key', function () {
+
+            const reducer = each([
+                {_id: 1, enabled: false, data: {}, },
+                {_id: 2, enabled: true, data: {}, },
+                {_id: 3, enabled: false, data: {}, },
+            ], {
+                enabled: node(false)
+                    .on('ENABLE', true)
+                    .on('DISABLE', false)
+            }, {
+                getKey: (state, action) => {
+
+                    if (!action.payload) { return }
+
+                    for (let i = 0; i < state.length; i++) {
+                        if (state[i]._id === action.payload.id) { return i }
+                    }
+                }
+            })
+
+            const store = createStore(reducer)
+
+            store.dispatch({ type: 'ENABLE', payload: { id: 3 } })
+            assert.deepStrictEqual(store.getState(), [
+                {_id: 1, enabled: false, data: {}, },
+                {_id: 2, enabled: true, data: {}, },
+                {_id: 3, enabled: true, data: {}, },
+            ])
+        })
+
         describe('on method', function () {
 
             it('registers reducer on ADD_ITEM action', function () {
