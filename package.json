@@ -1,6 +1,6 @@
 {
   "name": "redux-combiner",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Convenient reducers combiner for Redux",
   "main": "dest/combiner.js",
   "scripts": {

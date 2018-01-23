@@ -1,6 +1,6 @@
 import assert from 'assert'
 import { createStore } from 'redux'
-import { node, each } from '../src/combiner'
+import { node, demux } from '../src/combiner'
 
 describe('redux-combiner', function () {
 
@@ -25,7 +25,7 @@ describe('redux-combiner', function () {
                     todos.findIndex(todo => todo.id === action.id)
 
             const reducer = node({
-                todos: each([], {
+                todos: demux([], {
                     completed: node(false)
                     .on('TOGGLE_TODO', toggle)
                 }, { getKey })

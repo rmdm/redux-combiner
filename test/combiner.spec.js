@@ -1,6 +1,6 @@
 import assert from 'assert'
 import { createStore } from 'redux'
-import { node, each } from '../src/combiner'
+import { node, demux } from '../src/combiner'
 
 describe('redux-combiner', function () {
 
@@ -232,17 +232,17 @@ describe('redux-combiner', function () {
         })
     })
 
-    describe('each', function () {
+    describe('demux', function () {
 
         it('throws when no default value passed', function () {
             assert.throws(function () {
-                each()
+                demux()
             }, '/node must be initialized\./')
         })
 
         it('returns dummy reducer', function () {
 
-            const reducer = each({})
+            const reducer = demux({})
             const store = createStore(reducer)
 
             store.dispatch({ type: 'ACTION' })
@@ -250,9 +250,9 @@ describe('redux-combiner', function () {
             assert.deepStrictEqual(store.getState(), {})
         })
 
-        it('registers reducers on item schema with initial object state', function () {
+        it('selects child by action.id by default when state is object', function () {
 
-            const reducer = each({
+            const reducer = demux({
                 1: {_id: 1, enabled: false, data: {}, },
                 2: {_id: 2, enabled: true, data: {}, },
                 3: {_id: 3, enabled: false, data: {}, },
@@ -273,9 +273,9 @@ describe('redux-combiner', function () {
             })
         })
 
-        it('registers reducers on item schema with initial array state', function () {
+        it('selects child by action.index by default when state is array', function () {
 
-            const reducer = each([
+            const reducer = demux([
                 {_id: 1, enabled: false, data: {}, },
                 {_id: 2, enabled: true, data: {}, },
                 {_id: 3, enabled: false, data: {}, },
@@ -295,9 +295,9 @@ describe('redux-combiner', function () {
             ])
         })
 
-        it('specifies custom action field to locate item to update as an array', function () {
+        it('selects child by custom key on action specified as an array', function () {
 
-            const reducer = each({
+            const reducer = demux({
                 1: {_id: 1, enabled: false, data: {}, },
                 2: {_id: 2, enabled: true, data: {}, },
                 3: {_id: 3, enabled: false, data: {}, },
@@ -320,9 +320,9 @@ describe('redux-combiner', function () {
             })
         })
 
-        it('specifies custom action field to locate item to update as a string', function () {
+        it('selects child by custom key on action specified as a string', function () {
 
-            const reducer = each({
+            const reducer = demux({
                 1: {_id: 1, enabled: false, data: {}, },
                 2: {_id: 2, enabled: true, data: {}, },
                 3: {_id: 3, enabled: false, data: {}, },
@@ -345,9 +345,9 @@ describe('redux-combiner', function () {
             })
         })
 
-        it('specifies custom function to get entity key', function () {
+        it('specifies custom function to select entity key', function () {
 
-            const reducer = each([
+            const reducer = demux([
                 {_id: 1, enabled: false, data: {}, },
                 {_id: 2, enabled: true, data: {}, },
                 {_id: 3, enabled: false, data: {}, },
@@ -380,7 +380,7 @@ describe('redux-combiner', function () {
 
             it('registers reducer on ADD_ITEM action', function () {
 
-                const reducer = each([])
+                const reducer = demux([])
                     .on('ADD_ITEM', (items, action) => [ ...items, action.item ])
                 const store = createStore(reducer)
 
@@ -400,7 +400,7 @@ describe('redux-combiner', function () {
                     return [ ...head, { ...last, picked: true } ]
                 }
 
-                const reducer = each([
+                const reducer = demux([
                         { id: 1, picked: true },
                         { id: 2, picked: false },
                         { id: 3, picked: true },
@@ -430,7 +430,7 @@ describe('redux-combiner', function () {
 
             it('registers reducer on multiple actions', function () {
 
-                const reducer = each([ 1, 2, 3 ])
+                const reducer = demux([ 1, 2, 3 ])
                     .on([ 'RESET', 'RESTART' ], c => [])
 
                 const store = createStore(reducer)
@@ -442,7 +442,7 @@ describe('redux-combiner', function () {
 
             it('uses constant value as reducer value', function () {
 
-                const reducer = each([ 1, 2, 3 ])
+                const reducer = demux([ 1, 2, 3 ])
                     .on('RESET', [])
 
                 const store = createStore(reducer)

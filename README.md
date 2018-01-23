@@ -10,7 +10,7 @@ Example
 
 ```javascript
 import { createStore } from 'redux'
-import { node, each } from 'redux-combiner'
+import { node, demux } from 'redux-combiner'
 
 const toggle = completed => !completed
 const addTodo = (todos, action) => [
@@ -26,7 +26,7 @@ const getActionFilter = (filter, action) => action.filter
 const getKey = (todos, action) => todos.findIndex(todo => todo.id === action.id)
 
 const reducer = node({
-    todos: each([], {
+    todos: demux([], {
         completed: node(false)
         .on('TOGGLE_TODO', toggle)
     }, { getKey })

@@ -20,9 +20,9 @@ export function node (initial) {
     return fn
 }
 
-export function each (initial, schema, options) {
+export function demux (initial, schema, options) {
 
-    checkInitial(initial, each)
+    checkInitial(initial, demux)
 
     const reducersPaths = getReducersPaths(schema)
 
