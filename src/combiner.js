@@ -190,27 +190,13 @@ function restate (state, path, value) {
     }
 
     const result = Array.isArray(state) ? [] : {}
+    const [ key, ...restPath ] = path
 
-    for (let k in state) {
-        if (state.hasOwnProperty(k)) {
-            if (keysEqual(k, path[0])) {
-                result[k] = restate(state[k], path.slice(1), value)
-            } else {
-                result[k] = state[k]
-            }
-        }
-    }
+    Object.assign(result, state, {
+        [key]: restate(state[key], restPath, value),
+    })
 
     return result
-}
-
-function keysEqual (k1, k2) {
-
-    if (typeof k1 === 'string' || typeof k2 === 'string') {
-        return String(k1) === String(k2)
-    }
-
-    return k1 === k2
 }
 
 function addActionsReducers (actions, reducers) {
