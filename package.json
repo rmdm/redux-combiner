@@ -1,6 +1,6 @@
 {
   "name": "redux-combiner",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Convenient reducers combiner for Redux",
   "main": "dest/combiner.js",
   "scripts": {
@@ -12,8 +12,8 @@
     "prepare": "npm run compile"
   },
   "repository": {
-      "type": "git",
-      "url": "git+https://github.com/rmdm/redux-combiner.git"
+    "type": "git",
+    "url": "git+https://github.com/rmdm/redux-combiner.git"
   },
   "keywords": [
     "redux",
@@ -37,7 +37,8 @@
     "flow-bin": "^0.63.1",
     "mocha": "^4.1.0",
     "nyc": "^11.4.1",
-    "redux": "^3.7.2"
+    "redux": "^3.7.2",
+    "redux-loop": "^4.2.4"
   },
   "dependencies": {
     "babel-plugin-add-module-exports": "^0.2.1",

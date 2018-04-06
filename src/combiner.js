@@ -1,45 +1,103 @@
+export default combiner
+
+export const node = initNode(defaultCombiner)
+
+export const demux = initDemux(defaultCombiner)
+
 const INITIAL_ACTION = '@@redux-combiner/INIT'
 
-export function node (initial) {
+function defaultCombiner (reducersMap) {
 
-    checkInitial(initial, node)
+    return function (state = {}, action) {
 
-    const reducersPaths = getReducersPaths(initial)
+        const result = isArray(state) ? [] : {}
 
-    const fn = function (state = getDefault(initial), action) {
+        let changed = false
 
-        state = applyOwnReducers(state, action, fn.reducers)
-        state = applyInnerReducers(state, action, reducersPaths)
+        for (let k in reducersMap) {
+            if (hasOwn(reducersMap, k)) {
 
-        return state
+                const reducer = reducersMap[k]
+
+                const prevState = state[k]
+                const nextState = reducer(prevState, action)
+
+                if (typeof nextState === 'undefined') {
+                    throw new Error(`undefined state returned for key "${k}" on "${action.type}" action.`)
+                }
+
+                result[k] = nextState
+                changed = changed || prevState !== nextState
+            }
+        }
+
+        return changed ? result : state
     }
-
-    Object.defineProperty(fn, 'reducers', { value: new Map() })
-    Object.defineProperty(fn, 'on', { value: addActionsReducers })
-
-    return fn
 }
 
-export function demux (initial, schema, options) {
+function combiner (combineReducers) {
 
-    checkInitial(initial, demux)
-
-    const reducersPaths = getReducersPaths(schema)
-
-    const getChildKey = createActionKeyGetter(options)
-
-    const fn = function (state = getDefault(initial), action) {
-
-        state = applyOwnReducers(state, action, fn.reducers)
-        state = applyChildInnerReducers(state, action, reducersPaths, getChildKey)
-
-        return state
+    return {
+        node: initNode(combineReducers),
+        demux: initDemux(combineReducers),
     }
+}
 
-    Object.defineProperty(fn, 'reducers', { value: new Map() })
-    Object.defineProperty(fn, 'on', { value: addActionsReducers })
+function initNode (combineReducers) {
 
-    return fn
+    return function (initial) {
+
+        checkInitial(initial, node)
+
+        const innerReducer = getInnerReducer(initial, combineReducers)
+
+        const fn = function (state = getDefault(initial), action) {
+
+            state = applyOwnReducers(state, action, fn.reducers)
+            state = innerReducer(state, action)
+
+            return state
+        }
+
+        defineActions(fn, innerReducer.actions)
+        Object.defineProperty(fn, 'reducers', { value: new Map() })
+        Object.defineProperty(fn, 'on', { value: addActionsReducers })
+
+        return fn
+    }
+}
+
+function initDemux (combineReducers) {
+
+    return function (initial, schema, options) {
+
+        checkInitial(initial, demux)
+
+        const getChildKey = createActionKeyGetter(options)
+
+        const childReducer = getChildReducer(schema, getChildKey, combineReducers)
+
+        let inited = false
+
+        const fn = function (state = getDefault(initial), action) {
+
+            state = applyOwnReducers(state, action, fn.reducers)
+
+            if (inited) {
+                state = childReducer(state, action)
+            }
+
+            inited = true
+
+            return state
+        }
+
+        defineActions(fn, childReducer.actions)
+        Object.defineProperty(fn, 'reducers', { value: new Map() })
+        Object.defineProperty(fn, 'on', { value: addActionsReducers })
+
+        return fn
+    }
 }
 
 function checkInitial (initial, frame) {
@@ -58,7 +116,7 @@ function getDefault (initial) {
 
     if (isObject(initial)) {
         for (let k in initial) {
-            if (initial.hasOwnProperty(k)) {
+            if (hasOwn(initial, k)) {
                 initial[k] = getDefault(initial[k])
             }
         }
@@ -67,21 +125,111 @@ function getDefault (initial) {
     return initial
 }
 
-function getReducersPaths (reducer, reducersPaths = [], path = []) {
+function identity (data) {
+    return data
+}
 
-    if (isFunction(reducer)) {
-        reducersPaths.push({ path, reducer })
+function getInnerReducer (initial, combineReducers, noWrap) {
+
+    if (isFunction(initial)) {
+        if (!hasOwn(initial, 'actions')) {
+            defineActions(initial, null)
+        }
+        return initial
     }
 
-    if (isObject(reducer)) {
-        for (let k in reducer) {
-            if (reducer.hasOwnProperty(k)) {
-                getReducersPaths(reducer[k], reducersPaths, path.concat(k))
+    if (!isObject(initial)) {
+        return noWrap ? initial : identity
+    }
+
+    const reducers = {}
+    let reducersActions = []
+    let hasFn = false
+
+    for (let k in initial) {
+        if (hasOwn(initial, k)) {
+
+            const innerReducer =
+                    getInnerReducer(initial[k], combineReducers, true)
+
+            if (isFunction(innerReducer)) {
+                hasFn = true
+                reducers[k] = innerReducer
+                reducersActions = reducersActions === null
+                    ? null
+                    : !innerReducer.actions
+                        ? null
+                        : [ ...reducersActions, ...innerReducer.actions ]
             }
         }
     }
 
-    return reducersPaths
+    if (hasFn) {
+
+        const fn = function (state, action) {
+
+            const stateReducers = {}
+
+            for (let k in state) {
+                if (hasOwn(state, k)) {
+                    if (reducers[k] && (
+                        !reducers[k].actions
+                        || reducers[k].actions.has(action.type))
+                    ) {
+                        stateReducers[k] = reducers[k]
+                    } else {
+                        stateReducers[k] = function () { return state[k] }
+                    }
+                }
+            }
+
+            let reducer = combineReducers(stateReducers)
+
+            return reducer(state, action)
+        }
+
+        defineActions(fn, reducersActions)
+
+        return fn
+    } else {
+        return noWrap ? initial : identity
+    }
+}
+
+function getChildReducer (schema, getChildKey, combineReducers) {
+
+    const schemaReducer = getInnerReducer(schema, combineReducers)
+
+    const fn = function (state, action) {
+
+        if (!isObject(state)) {
+            return state
+        }
+
+        const childKey = getChildKey(state, action)
+
+        if (!hasOwn(state, childKey)) {
+            return state
+        }
+
+        const reducers = {}
+
+        for (let k in state) {
+            if (hasOwn(state, k)) {
+                reducers[k] = function () { return state[k] }
+            }
+        }
+
+        reducers[childKey] = schemaReducer
+
+        const reducer = combineReducers(reducers)
+
+        return reducer(state, action)
+    }
+
+    defineActions(fn, schemaReducer.actions)
+
+    return fn
 }
 
 function applyOwnReducers (state, action, actionReducers) {
@@ -97,50 +245,15 @@ function applyOwnReducers (state, action, actionReducers) {
     return state
 }
 
-function applyInnerReducers (state, action, reducersPaths) {
+function createActionKeyGetter (options = {}) {
 
-    outer: for (let rp of reducersPaths) {
+    let { actionKey, getKey } = options
 
-        let pointer = state
-
-        for (let k of rp.path) {
-
-            if (!isObject(pointer)) {
-                continue outer
-            }
-            pointer = pointer[k]
-        }
-
-        const result = rp.reducer(pointer, action)
-
-        if (result !== pointer) {
-            state = restate(state, rp.path, result)
-        }
+    if (isFunction(options)) {
+        getKey = options
+    } else if (isString(options) || isArray(options)) {
+        actionKey = options
     }
-
-    return state
-}
-
-function applyChildInnerReducers (state, action, reducersPaths, getChildKey) {
-
-    const childKey = getChildKey(state, action)
-
-    if (typeof childKey === 'undefined' || !state.hasOwnProperty(childKey)) {
-        return state
-    }
-
-    const child = state[childKey]
-
-    const newChild = applyInnerReducers(child, action, reducersPaths)
-
-    if (child !== newChild) {
-        state = restate(state, [childKey], newChild)
-    }
-
-    return state
-}
-
-function createActionKeyGetter ({ actionKey, getKey } = {}) {
 
     if (isFunction(getKey)) {
         return getKey
@@ -150,8 +263,8 @@ function createActionKeyGetter ({ actionKey, getKey } = {}) {
         return getDefaultActionKey
     }
 
-    if (!Array.isArray(actionKey)) {
-        if (typeof actionKey === 'string') {
+    if (!isArray(actionKey)) {
+        if (isString(actionKey)) {
             actionKey = actionKey.split('.')
         } else {
             actionKey = [ actionKey ]
@@ -164,7 +277,7 @@ function createActionKeyGetter ({ actionKey, getKey } = {}) {
 }
 
 function getDefaultActionKey (state, action) {
-    return Array.isArray(state) ? action.index : action.id
+    return isArray(state) ? action.index : action.id
 }
 
 function getValueByPath (obj, path) {
@@ -173,7 +286,7 @@ function getValueByPath (obj, path) {
 
     for (let p of path) {
 
-        if (!pointer.hasOwnProperty(p)) {
+        if (!hasOwn(pointer, p)) {
             return
         }
 
@@ -183,44 +296,29 @@ function getValueByPath (obj, path) {
     return pointer
 }
 
-function restate (state, path, value) {
+function addActionsReducers (actionTypes, reducers) {
 
-    if (!path.length) {
-        return value
-    }
-
-    const result = Array.isArray(state) ? [] : {}
-    const [ key, ...restPath ] = path
-
-    Object.assign(result, state, {
-        [key]: restate(state[key], restPath, value),
-    })
-
-    return result
-}
-
-function addActionsReducers (actions, reducers) {
-
-    if (!Array.isArray(actions)) {
-        actions = [ actions ]
+    if (!isArray(actionTypes)) {
+        actionTypes = [ actionTypes ]
     }
 
     reducers = getReducers(reducers)
 
-    actions.forEach(actionType => {
+    for (let actionType of actionTypes) {
 
-        reducers.forEach(reducer => {
+        for(let reducer of reducers) {
 
             let actionReducers = this.reducers.get(actionType)
 
             if (!actionReducers) {
                 actionReducers = []
+                this.actions && this.actions.add(actionType)
                 this.reducers.set(actionType, actionReducers)
             }
 
             actionReducers.push(reducer)
-        })
-    })
+        }
+    }
 
     return this
 }
@@ -231,7 +329,7 @@ function getReducers (reducers) {
         return [ reducers ]
     }
 
-    if (!Array.isArray(reducers)) {
+    if (!isArray(reducers)) {
         return [ () => reducers ]
     }
 
@@ -252,10 +350,28 @@ function getReducers (reducers) {
     return [ () => reducers ]
 }
 
+function defineActions (fn, actions) {
+    Object.defineProperty(fn, 'actions', {
+        value: actions === null ? null : new Set(actions)
+    })
+}
+
 function isObject (obj) {
     return obj && typeof obj === 'object'
 }
 
+function isArray (arr) {
+    return Array.isArray(arr)
+}
+
 function isFunction (fn) {
     return typeof fn === 'function'
+}
+
+function isString (str) {
+    return typeof str === 'string'
+}
+
+function hasOwn (obj, prop) {
+    return Object.prototype.hasOwnProperty.call(obj, prop)
 }
