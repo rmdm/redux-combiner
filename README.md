@@ -6,7 +6,7 @@ Convenient reducers combiner for Redux.
 Example
 =======
 
-[Official Redux example.](https://redux.js.org/docs/basics/ExampleTodoList.html#reducers) using **redux-combiner**.
+[Official Redux example](https://redux.js.org/docs/basics/ExampleTodoList.html#reducers) using **redux-combiner**.
 
 ```javascript
 import { createStore } from 'redux'
