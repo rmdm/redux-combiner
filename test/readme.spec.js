@@ -4,40 +4,42 @@ import { node, demux } from '../src/combiner'
 
 describe('redux-combiner', function () {
 
-    describe('slightly modified official Redux example using redux-combiner', function () {
+    describe('official Redux example using redux-combiner', function () {
 
         let store
 
         beforeEach(function () {
 
             const toggle = completed => !completed
-            const addTodo = (todos, action) => ({
+            const addTodo = (todos, action) => [
                 ...todos,
-                [ action.id ]: {
+                {
                     id: action.id,
                     text: action.text,
                     completed: false
                 }
-            })
+            ]
             const getActionFilter = (filter, action) => action.filter
+            const getKey = (todos, action) => todos.findIndex(todo => todo.id === action.id)
 
             const reducer = node({
-                todos: demux({}, {
-                    completed: node(false)
-                    .on('TOGGLE_TODO', toggle)
-                })
-                .on('ADD_TODO', addTodo),
+                todos: demux([], {
+                        completed: node(false)
+                            .on('TOGGLE_TODO', toggle)
+                    }, getKey)
+                    .on('ADD_TODO', addTodo),
 
                 visibilityFilter: node('SHOW_ALL')
                 .on('SET_VISIBILITY_FILTER', getActionFilter)
             })
+
 
             store = createStore(reducer)
         })
 
         it('returns initial state', function () {
             assert.deepStrictEqual(store.getState(), {
-                todos: {},
+                todos: [],
                 visibilityFilter: 'SHOW_ALL',
             })
         })
@@ -51,13 +53,13 @@ describe('redux-combiner', function () {
             })
 
             assert.deepStrictEqual(store.getState(), {
-                todos: {
-                    1: {
+                todos: [
+                    {
                         id: 1,
                         text: 'write tests',
                         completed: false,
                     }
-                },
+                ],
                 visibilityFilter: 'SHOW_ALL',
             })
         })
@@ -94,28 +96,28 @@ describe('redux-combiner', function () {
             })
 
             assert.deepStrictEqual(store.getState(), {
-                todos: {
-                    1: {
+                todos: [
+                    {
                         id: 1,
                         text: 'write tests',
                         completed: false,
                     },
-                    2: {
+                    {
                         id: 2,
                         text: 'increase coverage',
                         completed: true,
                     },
-                    3: {
+                    {
                         id: 3,
                         text: '???',
                         completed: false,
                     },
-                    4: {
+                    {
                         id: 4,
                         text: 'PROFIT',
                         completed: false,
                     },
-                },
+                ],
                 visibilityFilter: 'SHOW_ALL',
             })
         })
@@ -128,7 +130,7 @@ describe('redux-combiner', function () {
             })
 
             assert.deepStrictEqual(store.getState(), {
-                todos: {},
+                todos: [],
                 visibilityFilter: 'SHOW_ACTIVE',
             })
         })
