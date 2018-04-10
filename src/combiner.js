@@ -1,12 +1,20 @@
 export default combiner
 
-export const node = initNode(defaultCombiner)
+export const node = initNode(defaultCombineReducers)
 
-export const demux = initDemux(defaultCombiner)
+export const demux = initDemux(defaultCombineReducers)
 
 const INITIAL_ACTION = '@@redux-combiner/INIT'
 
-function defaultCombiner (reducersMap) {
+function combiner (combineReducers) {
+
+    return {
+        node: initNode(combineReducers),
+        demux: initDemux(combineReducers),
+    }
+}
+
+function defaultCombineReducers (reducersMap) {
 
     return function (state = {}, action) {
 
@@ -32,14 +40,6 @@ function defaultCombiner (reducersMap) {
         }
 
         return changed ? result : state
-    }
-}
-
-function combiner (combineReducers) {
-
-    return {
-        node: initNode(combineReducers),
-        demux: initDemux(combineReducers),
     }
 }
 
@@ -75,6 +75,8 @@ function initDemux (combineReducers) {
 
         const getChildKey = createActionKeyGetter(options)
 
+        const innerReducer = getInnerReducer(initial, combineReducers)
+
         const childReducer = getChildReducer(schema, getChildKey, combineReducers)
 
         let inited = false
@@ -82,6 +84,7 @@ function initDemux (combineReducers) {
         const fn = function (state = getDefault(initial), action) {
 
             state = applyOwnReducers(state, action, fn.reducers)
+            state = innerReducer(state, action)
 
             if (inited) {
                 state = childReducer(state, action)
@@ -92,7 +95,15 @@ function initDemux (combineReducers) {
             return state
         }
 
-        defineActions(fn, childReducer.actions)
+        const fnActions = childReducer.actions === null
+            || innerReducer.actions === null
+                ? null
+                : new Set([
+                    ...( childReducer.actions || [] ),
+                    ...( innerReducer.actions || [] ),
+                ])
+
+        defineActions(fn, fnActions)
         Object.defineProperty(fn, 'reducers', { value: new Map() })
         Object.defineProperty(fn, 'on', { value: addActionsReducers })
 

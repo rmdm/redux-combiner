@@ -574,6 +574,61 @@ describe('redux-combiner', function () {
             assert.equal(callsCount, 0)
         })
 
+        it('sets independent reducers on initial state', function () {
+
+            const reducer = demux([
+                { counter: node(0).on('INC_0', counter => counter + 10) },
+                { counter: node(0).on('INC_1', counter => counter + 5) },
+                { counter: 0 },
+            ], {
+                counter: node(0).on('INC', counter => counter + 1)
+            })
+
+            const store = createStore(reducer)
+
+            store.dispatch({ type: 'INC_0', index: 0 })
+
+            store.dispatch({ type: 'INC_1', index: 1 })
+
+            store.dispatch({ type: 'INC', index: 0 })
+            store.dispatch({ type: 'INC', index: 1 })
+            store.dispatch({ type: 'INC', index: 2 })
+
+            assert.deepStrictEqual(store.getState(), [
+                { counter: 11 },
+                { counter: 6 },
+                { counter: 1 },
+            ])
+        })
+
+        it('sets independent reducers on initial state on the same action',
+                function () {
+
+            const reducer = demux([
+                { counter: node(0).on('INC', counter => counter + 10) },
+                { counter: node(0).on('INC', counter => counter + 5) },
+                { counter: 0 },
+            ], {
+                counter: node(0).on('INC', counter => counter + 1)
+            })
+
+            const store = createStore(reducer)
+
+            store.dispatch({ type: 'INC', index: 0 })
+
+            store.dispatch({ type: 'INC', index: 1 })
+
+            store.dispatch({ type: 'INC', index: 0 })
+            store.dispatch({ type: 'INC', index: 1 })
+            store.dispatch({ type: 'INC', index: 2 })
+
+            assert.deepStrictEqual(store.getState(), [
+                { counter: 52 },
+                { counter: 27 },
+                { counter: 1 },
+            ])
+        })
+
         describe('on method', function () {
 
             it('registers reducer on ADD_ITEM action', function () {
