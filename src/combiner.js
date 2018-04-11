@@ -1,8 +1,6 @@
 export default combiner
 
-export const node = initNode(defaultCombineReducers)
-
-export const demux = initDemux(defaultCombineReducers)
+export const { node, demux } = combiner(defaultCombineReducers)
 
 const INITIAL_ACTION = '@@redux-combiner/INIT'
 
@@ -97,11 +95,11 @@ function initDemux (combineReducers) {
 
         const fnActions = childReducer.actions === null
             || innerReducer.actions === null
-                ? null
-                : new Set([
-                    ...( childReducer.actions || [] ),
-                    ...( innerReducer.actions || [] ),
-                ])
+            ? null
+            : new Set([
+                ...( childReducer.actions || [] ),
+                ...( innerReducer.actions || [] ),
+            ])
 
         defineActions(fn, fnActions)
         Object.defineProperty(fn, 'reducers', { value: new Map() })
@@ -136,6 +134,14 @@ function getDefault (initial) {
     return initial
 }
 
+function makeActionIdendity () {
+    const fn = function (data) {
+        return data
+    }
+    defineActions(fn, [])
+    return fn
+}
+
 function identity (data) {
     return data
 }
@@ -150,7 +156,7 @@ function getInnerReducer (initial, combineReducers, noWrap) {
     }
 
     if (!isObject(initial)) {
-        return noWrap ? initial : identity
+        return noWrap ? initial : makeActionIdendity()
     }
 
     const reducers = {}
@@ -189,7 +195,7 @@ function getInnerReducer (initial, combineReducers, noWrap) {
                     ) {
                         stateReducers[k] = reducers[k]
                     } else {
-                        stateReducers[k] = function () { return state[k] }
+                        stateReducers[k] = identity
                     }
                 }
             }
@@ -203,7 +209,7 @@ function getInnerReducer (initial, combineReducers, noWrap) {
 
         return fn
     } else {
-        return noWrap ? initial : identity
+        return noWrap ? initial : makeActionIdendity()
     }
 }
 
@@ -227,7 +233,7 @@ function getChildReducer (schema, getChildKey, combineReducers) {
 
         for (let k in state) {
             if (hasOwn(state, k)) {
-                reducers[k] = function () { return state[k] }
+                reducers[k] = identity
             }
         }
 

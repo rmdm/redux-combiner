@@ -1,6 +1,6 @@
 import assert from 'assert'
 import { createStore } from 'redux'
-import {install, combineReducers, loop, Cmd } from 'redux-loop'
+import { install, combineReducers, loop, Cmd } from 'redux-loop'
 import combiner, { node, demux } from '../src/combiner'
 
 describe('redux-combiner', function () {
