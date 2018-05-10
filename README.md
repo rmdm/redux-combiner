@@ -43,7 +43,7 @@ store = createStore(reducer)
 
 redux-combiner comes with two kinds of nodes: `node` and `demux`. `node` is just a normal node: it describes its subtree and registers reducers on the node. `demux` _(demultiplexer)_ is a bit special one: it also expects that described node is a collection of nodes with a specific structure, and each such node can be uniquely addressed within the collection. So, from the example, we can see that `todos` array is described by `demux` node, and each item can have its property `completed` to be toggled on `TOGGLE_TODO` action. Which item to pick is determined by the action `id` property.
 
-From the example you can also see that there is no need for switch-case reducers and that propagation of state changes is handled for you, though you still need to return new values from your reducers when actual changes happen (as in `ADD_TODO` reducer in the example).
+From the example we can also see that there is no need for switch-case reducers and that propagation of state changes is handled for you, though you still need to return new values from your reducers when actual changes happen (as in `ADD_TODO` reducer in the example).
 
 To be efficent, redux-combiner uses information on expected actions of each reducers subtree and calls only related subtrees. So, in the example, only `visibilityFilter` subtree will be called on `SET_VISIBILITY_FILTER` action.
 
@@ -102,6 +102,6 @@ import reducers from './reducers'
 combineReducers([ ...reducers ])
 ```
 
-### Limitations
+## Limitations
 
 Currently only plain js object states are supported, because of notion overlapping between reducers tree structure and state representation. But it should be quite easy to add support for less trivial structures, such as Immutable.js structures, by splitting these concepts.
