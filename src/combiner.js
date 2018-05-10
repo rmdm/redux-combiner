@@ -2,7 +2,10 @@ export default combiner
 
 export const { node, demux } = combiner(defaultCombineReducers)
 
-const INITIAL_ACTION = '@@redux-combiner/INIT'
+export const combineReducers = defaultCombineReducers
+
+const ACTIONS = Symbol('actions')
+const REDUCERS = Symbol('reducers')
 
 function combiner (combineReducers) {
 
@@ -12,53 +15,24 @@ function combiner (combineReducers) {
     }
 }
 
-function defaultCombineReducers (reducersMap) {
-
-    return function (state = {}, action) {
-
-        const result = isArray(state) ? [] : {}
-
-        let changed = false
-
-        for (let k in reducersMap) {
-            if (hasOwn(reducersMap, k)) {
-
-                const reducer = reducersMap[k]
-
-                const prevState = state[k]
-                const nextState = reducer(prevState, action)
-
-                if (typeof nextState === 'undefined') {
-                    throw new Error(`undefined state returned for key "${k}" on "${action.type}" action.`)
-                }
-
-                result[k] = nextState
-                changed = changed || prevState !== nextState
-            }
-        }
-
-        return changed ? result : state
-    }
-}
-
 function initNode (combineReducers) {
 
-    return function (initial) {
+    return function nodeFn (initial) {
 
-        checkInitial(initial, node)
+        checkInitial(initial, nodeFn)
 
         const innerReducer = getInnerReducer(initial, combineReducers)
 
-        const fn = function (state = getDefault(initial), action) {
+        const fn = function (state, action) {
 
-            state = applyOwnReducers(state, action, fn.reducers)
+            state = applyOwnReducers(state, action, fn[REDUCERS])
             state = innerReducer(state, action)
 
             return state
         }
 
-        defineActions(fn, innerReducer.actions)
-        Object.defineProperty(fn, 'reducers', { value: new Map() })
+        defineActions(fn, innerReducer[ACTIONS])
+        Object.defineProperty(fn, REDUCERS, { value: new Map() })
         Object.defineProperty(fn, 'on', { value: addActionsReducers })
 
         return fn
@@ -67,42 +41,30 @@ function initNode (combineReducers) {
 
 function initDemux (combineReducers) {
 
-    return function (initial, schema, options) {
+    return function demuxFn (initial, schema, selector) {
 
-        checkInitial(initial, demux)
+        checkInitial(initial, demuxFn)
 
-        const getChildKey = createActionKeyGetter(options)
-
+        const selectChild = createSelector(selector)
         const innerReducer = getInnerReducer(initial, combineReducers)
+        const childReducer = getChildReducer(
+                schema, selectChild, combineReducers)
 
-        const childReducer = getChildReducer(schema, getChildKey, combineReducers)
+        const fn = function (state, action) {
 
-        let inited = false
-
-        const fn = function (state = getDefault(initial), action) {
-
-            state = applyOwnReducers(state, action, fn.reducers)
+            state = applyOwnReducers(state, action, fn[REDUCERS])
             state = innerReducer(state, action)
-
-            if (inited) {
-                state = childReducer(state, action)
-            }
-
-            inited = true
+            state = childReducer(state, action)
 
             return state
         }
 
-        const fnActions = childReducer.actions === null
-            || innerReducer.actions === null
+        const fnActions = !childReducer[ACTIONS] || !innerReducer[ACTIONS]
             ? null
-            : new Set([
-                ...( childReducer.actions || [] ),
-                ...( innerReducer.actions || [] ),
-            ])
+            : [ ...childReducer[ACTIONS], ...innerReducer[ACTIONS] ]
 
         defineActions(fn, fnActions)
-        Object.defineProperty(fn, 'reducers', { value: new Map() })
+        Object.defineProperty(fn, REDUCERS, { value: new Map() })
         Object.defineProperty(fn, 'on', { value: addActionsReducers })
 
         return fn
@@ -117,50 +79,42 @@ function checkInitial (initial, frame) {
     }
 }
 
-function getDefault (initial) {
+function applyOwnReducers (state, action, actionReducers) {
 
-    if (isFunction(initial)) {
-        return initial(undefined, { type: INITIAL_ACTION })
-    }
+    const reducers = actionReducers.get(action.type)
 
-    if (isObject(initial)) {
-        for (let k in initial) {
-            if (hasOwn(initial, k)) {
-                initial[k] = getDefault(initial[k])
-            }
-        }
-    }
+    if (!reducers) { return state }
 
-    return initial
-}
-
-function makeActionIdendity () {
-    const fn = function (data) {
-        return data
-    }
-    defineActions(fn, [])
-    return fn
-}
-
-function identity (data) {
-    return data
+    return reducers.reduce(function (state, reducer) {
+        return reducer(state, action)
+    }, state)
 }
 
 function getInnerReducer (initial, combineReducers, noWrap) {
 
     if (isFunction(initial)) {
-        if (!hasOwn(initial, 'actions')) {
-            defineActions(initial, null)
-        }
         return initial
     }
 
     if (!isObject(initial)) {
-        return noWrap ? initial : makeActionIdendity()
+        return noWrap ? initial : makeActionIdentity(initial)
     }
 
+    const { reducers, defaultReducers } = getInitialStateReducers(
+            initial, combineReducers)
+
+    if (reducers) {
+        return getInitialInnerReducer(
+                initial, reducers, defaultReducers, combineReducers)
+    } else {
+        return noWrap ? initial : makeActionIdentity(initial)
+    }
+}
+
+function getInitialStateReducers (initial, combineReducers) {
+
     const reducers = {}
-    let reducersActions = []
+    const defaultReducers = isArray(initial) ? [] : {}
     let hasFn = false
 
     for (let k in initial) {
@@ -171,129 +125,150 @@ function getInnerReducer (initial, combineReducers, noWrap) {
 
             if (isFunction(innerReducer)) {
                 hasFn = true
-                reducers[k] = innerReducer
-                reducersActions = reducersActions === null
-                    ? null
-                    : !innerReducer.actions
-                        ? null
-                        : [ ...reducersActions, ...innerReducer.actions ]
+                defaultReducers[k] = reducers[k] = innerReducer
+            } else {
+                defaultReducers[k] = function () { return innerReducer }
             }
         }
     }
 
-    if (hasFn) {
-
-        const fn = function (state, action) {
-
-            const stateReducers = {}
-
-            for (let k in state) {
-                if (hasOwn(state, k)) {
-                    if (reducers[k] && (
-                        !reducers[k].actions
-                        || reducers[k].actions.has(action.type))
-                    ) {
-                        stateReducers[k] = reducers[k]
-                    } else {
-                        stateReducers[k] = identity
-                    }
-                }
-            }
-
-            let reducer = combineReducers(stateReducers)
-
-            return reducer(state, action)
-        }
-
-        defineActions(fn, reducersActions)
-
-        return fn
-    } else {
-        return noWrap ? initial : makeActionIdendity()
-    }
+    return { reducers: hasFn ? reducers : null, defaultReducers }
 }
 
-function getChildReducer (schema, getChildKey, combineReducers) {
+function getInitialInnerReducer (
+        initial, reducers, defaultReducers, combineReducers) {
+
+    const getDefault = combineReducers(defaultReducers)
+
+    const fn = function (state, action) {
+
+        if (state === undefined) {
+            return getDefault(undefined, action)
+        }
+
+        if (!hasAction(fn, action)) {
+            return state
+        }
+
+        const stateReducers = {}
+
+        for (let k in state) {
+            if (hasOwn(state, k)) {
+                if (hasAction(reducers[k], action)) {
+                    stateReducers[k] = reducers[k]
+                } else {
+                    stateReducers[k] = identity
+                }
+            }
+        }
+
+        let reducer = combineReducers(stateReducers)
+
+        return reducer(state, action)
+    }
+
+    const reducersActions = getReducersActions(reducers)
+    defineActions(fn, reducersActions)
+
+    return fn
+}
+
+function getChildReducer (schema, selectChild, combineReducers) {
 
     const schemaReducer = getInnerReducer(schema, combineReducers)
 
     const fn = function (state, action) {
 
-        if (!isObject(state)) {
+        if (!isObject(state) || !hasAction(fn, action)) {
             return state
         }
 
-        const childKey = getChildKey(state, action)
+        const reducers = getStateChildReducers(
+                state, action, selectChild, schemaReducer)
 
-        if (!hasOwn(state, childKey)) {
-            return state
-        }
-
-        const reducers = {}
-
-        for (let k in state) {
-            if (hasOwn(state, k)) {
-                reducers[k] = identity
-            }
-        }
-
-        reducers[childKey] = schemaReducer
-
-        const reducer = combineReducers(reducers)
+        const reducer = reducers ? combineReducers(reducers) : identity
 
         return reducer(state, action)
     }
 
-    defineActions(fn, schemaReducer.actions)
+    defineActions(fn, schemaReducer[ACTIONS])
 
     return fn
 }
 
-function applyOwnReducers (state, action, actionReducers) {
+function getStateChildReducers (state, action, selectChild, schemaReducer) {
 
-    const reducers = actionReducers.get(action.type)
+    const reducers = mapIdenity(state)
 
-    if (reducers) {
-        state = reducers.reduce(function (state, reducer) {
-            return reducer(state, action)
-        }, state)
+    const childKey = selectChild(state, action)
+
+    if (isIterableObject(childKey)) {
+        let someKeysAreSet = false
+        for (let k of childKey) {
+            if (hasOwn(state, k)) {
+                someKeysAreSet = true
+                reducers[k] = schemaReducer
+            }
+        }
+        if (!someKeysAreSet) {
+            return null
+        }
+    } else {
+        if (!hasOwn(state, childKey)) {
+            return null
+        }
+        reducers[childKey] = schemaReducer
     }
 
-    return state
+    return reducers
 }
 
-function createActionKeyGetter (options = {}) {
+function getReducersActions (reducers) {
 
-    let { actionKey, getKey } = options
+    let actions = []
 
-    if (isFunction(options)) {
-        getKey = options
-    } else if (isString(options) || isArray(options)) {
-        actionKey = options
-    }
-
-    if (isFunction(getKey)) {
-        return getKey
-    }
-
-    if (!actionKey) {
-        return getDefaultActionKey
-    }
-
-    if (!isArray(actionKey)) {
-        if (isString(actionKey)) {
-            actionKey = actionKey.split('.')
+    for (let k in reducers) {
+        const reducer = reducers[k]
+        if (!reducer[ACTIONS]) {
+            return null
         } else {
-            actionKey = [ actionKey ]
+            actions = [ ... actions, ... reducer[ACTIONS] ]
         }
     }
 
+    return actions
+}
+
+function mapIdenity (obj) {
+
+    const map = {}
+
+    for (let k in obj) {
+        if (hasOwn(obj, k)) {
+            map[k] = identity
+        }
+    }
+
+    return map
+}
+
+function createSelector (selector = {}) {
+
+    if (isFunction(selector)) { return selector }
+
+    if (!isArray(selector)) {
+
+        if (isObject(selector)) { return getDefaultSelector }
+
+        selector = isString(selector) ? selector.split('.') : [ selector ]
+    }
+
     return function (state, action) {
-        return getValueByPath(action, actionKey)
+        return getValueByPath(action, selector)
     }
 }
 
-function getDefaultActionKey (state, action) {
+function getDefaultSelector (state, action) {
     return isArray(state) ? action.index : action.id
 }
 
@@ -323,16 +298,15 @@ function addActionsReducers (actionTypes, reducers) {
 
     for (let actionType of actionTypes) {
 
-        for(let reducer of reducers) {
+        let actionReducers = this[REDUCERS].get(actionType)
 
-            let actionReducers = this.reducers.get(actionType)
+        if (!actionReducers) {
+            actionReducers = []
+            this[ACTIONS] && this[ACTIONS].add(actionType)
+            this[REDUCERS].set(actionType, actionReducers)
+        }
 
-            if (!actionReducers) {
-                actionReducers = []
-                this.actions && this.actions.add(actionType)
-                this.reducers.set(actionType, actionReducers)
-            }
-
+        for (let reducer of reducers) {
             actionReducers.push(reducer)
         }
     }
@@ -342,24 +316,13 @@ function addActionsReducers (actionTypes, reducers) {
 
 function getReducers (reducers) {
 
-    if (isFunction(reducers)) {
-        return [ reducers ]
-    }
+    if (reducers === undefined) { return [] }
 
-    if (!isArray(reducers)) {
-        return [ () => reducers ]
-    }
+    if (isFunction(reducers)) { return [ reducers ] }
 
-    let containsReducer = false
+    if (!isArray(reducers)) { return [ () => reducers ] }
 
-    for (let reducer of reducers) {
-        if (isFunction(reducer)) {
-            containsReducer = true
-            break
-        }
-    }
-
-    if (containsReducer) {
+    if (reducers.some(isFunction)) {
         return reducers.map(reducer =>
             isFunction(reducer) ? reducer : () => reducer)
     }
@@ -367,14 +330,68 @@ function getReducers (reducers) {
     return [ () => reducers ]
 }
 
+function defaultCombineReducers (reducersMap) {
+
+    return function (state = {}, action) {
+
+        const result = isArray(state)
+            ? []
+            : isArray(reducersMap)
+                ? []
+                : {}
+
+        let changed = false
+
+        for (let k in reducersMap) {
+
+            const reducer = reducersMap[k]
+
+            const prevState = state[k]
+            const nextState = reducer(prevState, action)
+
+            if (typeof nextState === 'undefined') {
+                throw new Error(
+                    'undefined state returned for key ' +
+                        `"${k}" on "${action.type}" action.`)
+            }
+
+            result[k] = nextState
+            changed = changed || prevState !== nextState
+        }
+
+        return changed ? result : state
+    }
+}
+
 function defineActions (fn, actions) {
-    Object.defineProperty(fn, 'actions', {
-        value: actions === null ? null : new Set(actions)
+    if (!actions) { return }
+    Object.defineProperty(fn, ACTIONS, {
+        value: new Set(actions)
     })
 }
 
+function hasAction (fn, action) {
+    return fn && (!fn[ACTIONS] || fn[ACTIONS].has(action.type))
+}
+
+function makeActionIdentity (initial) {
+    const fn = function (data = initial) {
+        return data
+    }
+    defineActions(fn, [])
+    return fn
+}
+
+function identity (data = null) {
+    return data
+}
+
+function flatten (arrays) {
+    return Array.prototype.concat.apply([], arrays)
+}
+
 function isObject (obj) {
-    return obj && typeof obj === 'object'
+    return typeof obj === 'object' && obj
 }
 
 function isArray (arr) {
@@ -387,6 +404,10 @@ function isFunction (fn) {
 
 function isString (str) {
     return typeof str === 'string'
+}
+
+function isIterableObject (iterable) {
+    return isObject(iterable) && isFunction(iterable[Symbol.iterator])
 }
 
 function hasOwn (obj, prop) {

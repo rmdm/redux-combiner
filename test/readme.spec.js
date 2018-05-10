@@ -1,6 +1,6 @@
 import assert from 'assert'
 import { createStore } from 'redux'
-import { node, demux } from '../src/combiner'
+import { node, demux, combineReducers } from '../src/combiner'
 
 describe('redux-combiner', function () {
 
@@ -10,29 +10,28 @@ describe('redux-combiner', function () {
 
         beforeEach(function () {
 
-            const toggle = completed => !completed
-            const addTodo = (todos, action) => [
-                ...todos,
-                {
-                    id: action.id,
-                    text: action.text,
-                    completed: false
-                }
-            ]
-            const getActionFilter = (filter, action) => action.filter
-            const getKey = (todos, action) => todos.findIndex(todo => todo.id === action.id)
-
             const reducer = node({
-                todos: demux([], {
-                        completed: node(false)
-                            .on('TOGGLE_TODO', toggle)
-                    }, getKey)
-                    .on('ADD_TODO', addTodo),
+
+                todos: demux(
+                        [],
+                        {
+                            completed: node(false)
+                                .on('TOGGLE_TODO', completed => !completed)
+                        },
+                        (todos, action) => todos.findIndex(todo => todo.id === action.id)
+                    )
+                    .on('ADD_TODO', (todos, action) => [
+                        ...todos,
+                        {
+                            id: action.id,
+                            text: action.text,
+                            completed: false
+                        }
+                    ]),
 
                 visibilityFilter: node('SHOW_ALL')
-                .on('SET_VISIBILITY_FILTER', getActionFilter)
+                    .on('SET_VISIBILITY_FILTER', (filter, action) => action.filter)
             })
-
 
             store = createStore(reducer)
         })
@@ -133,6 +132,29 @@ describe('redux-combiner', function () {
                 todos: [],
                 visibilityFilter: 'SHOW_ACTIVE',
             })
+        })
+    })
+
+    describe('combineReducers', function () {
+
+        it('supports arrays as roots of composition', function () {
+
+            const inc = c => c + 1
+
+            const reducers = [
+                node(0).on('INC_0', inc),
+                node(0).on('INC_1', inc),
+            ]
+
+            const reducer = combineReducers(reducers)
+
+            const store = createStore(reducer)
+
+            store.dispatch({ type: 'INC_0' })
+            store.dispatch({ type: 'INC_1' })
+            store.dispatch({ type: 'INC_0' })
+
+            assert.deepStrictEqual(store.getState(), [ 2, 1 ])
         })
     })
 })

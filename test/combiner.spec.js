@@ -207,6 +207,9 @@ describe('redux-combiner', function () {
         it('defines a structure on each reducer to check for action propagation',
                 function () {
 
+            const ACTIONS = Object.getOwnPropertySymbols(node(0))
+                    .find(s => String(s) === 'Symbol(actions)')
+
             const nodeA = node(0).on('INC_A', a => a + 1)
             const nodeB = node(0).on('INC_B', b => b + 1)
             const nodeC = node({
@@ -225,28 +228,23 @@ describe('redux-combiner', function () {
                 x: nodeX,
             })
 
-            assert.deepStrictEqual(nodeA.actions, new Set([ 'INC_A' ]))
-            assert.deepStrictEqual(nodeB.actions, new Set([ 'INC_B' ]))
-            assert.deepStrictEqual(nodeC.actions, new Set([ 'INC_A', 'INC_B' ]))
-            assert.deepStrictEqual(nodeD.actions, new Set([ 'INC_D' ]))
-            assert.deepStrictEqual(nodeX.actions, null)
-            assert.deepStrictEqual(nodeZ.actions, null)
+            assert.deepStrictEqual(nodeA[ACTIONS], new Set([ 'INC_A' ]))
+            assert.deepStrictEqual(nodeB[ACTIONS], new Set([ 'INC_B' ]))
+            assert.deepStrictEqual(nodeC[ACTIONS], new Set([ 'INC_A', 'INC_B' ]))
+            assert.deepStrictEqual(nodeD[ACTIONS], new Set([ 'INC_D' ]))
+            assert.deepStrictEqual(nodeX[ACTIONS], undefined)
+            assert.deepStrictEqual(nodeZ[ACTIONS], undefined)
         })
 
-        it('uses actions property to decide which nodes to call', function () {
+        it('calls only reducers related to an action', function () {
 
-            function mkFnWithActions (actions) {
-                const fn = function (state = 0, act) { return state + 1 }
-                Object.defineProperty(fn, 'actions', { value: actions })
-                return fn
-            }
+            const inc = state => state + 1
 
             const reducer = node({
-                a: mkFnWithActions(new Set([ 'A' ])),
-                a2: mkFnWithActions(new Set([ 'A' ])),
-                actionless: mkFnWithActions(null),
-                b: mkFnWithActions(new Set([ 'B' ])),
-                ab: mkFnWithActions(new Set([ 'A', 'B' ])),
+                a: node(0).on('A', inc),
+                a2: node(0).on('A', inc),
+                b: node(0).on('B', inc),
+                ab: node(0).on('A', inc).on('B', inc),
                 plain: function (state = 0) { return state + 1 },
             })
 
@@ -255,12 +253,11 @@ describe('redux-combiner', function () {
             store.dispatch({ type: 'A' })
 
             assert.deepStrictEqual(store.getState(), {
-                a: 2,
-                a2: 2,
-                actionless: 3, // init combiner + init redux + A
-                b: 1, // init combiner
-                ab: 2,
-                plain: 3, // same as actionless
+                a: 1,
+                a2: 1,
+                b: 0,
+                ab: 1,
+                plain: 2, // get initial state + action
             })
         })
 
@@ -396,32 +393,6 @@ describe('redux-combiner', function () {
             ])
         })
 
-        it('selects child by custom key on action specified as an array',
-                function () {
-
-            const reducer = demux({
-                1: {_id: 1, enabled: false, data: {}, },
-                2: {_id: 2, enabled: true, data: {}, },
-                3: {_id: 3, enabled: false, data: {}, },
-            }, {
-                enabled: node(false)
-                    .on('ENABLE', true)
-                    .on('DISABLE', false)
-            }, {
-                actionKey: [ 'payload', 'key' ]
-            })
-
-            const store = createStore(reducer)
-
-            store.dispatch({ type: 'ENABLE', payload: { key: 3 }})
-
-            assert.deepStrictEqual(store.getState(), {
-                1: {_id: 1, enabled: false, data: {}, },
-                2: {_id: 2, enabled: true, data: {}, },
-                3: {_id: 3, enabled: true, data: {}, },
-            })
-        })
-
         it('selects child by custom key on action specified as an array shorthand',
                 function () {
 
@@ -434,32 +405,6 @@ describe('redux-combiner', function () {
                     .on('ENABLE', true)
                     .on('DISABLE', false)
             }, [ 'payload', 'key' ])
-
-            const store = createStore(reducer)
-
-            store.dispatch({ type: 'ENABLE', payload: { key: 3 }})
-
-            assert.deepStrictEqual(store.getState(), {
-                1: {_id: 1, enabled: false, data: {}, },
-                2: {_id: 2, enabled: true, data: {}, },
-                3: {_id: 3, enabled: true, data: {}, },
-            })
-        })
-
-        it('selects child by custom key on action specified as a string',
-                function () {
-
-            const reducer = demux({
-                1: {_id: 1, enabled: false, data: {}, },
-                2: {_id: 2, enabled: true, data: {}, },
-                3: {_id: 3, enabled: false, data: {}, },
-            }, {
-                enabled: node(false)
-                    .on('ENABLE', true)
-                    .on('DISABLE', false)
-            }, {
-                actionKey: 'payload.key',
-            })
 
             const store = createStore(reducer)
 
@@ -496,34 +441,6 @@ describe('redux-combiner', function () {
             })
         })
 
-        it('specifies custom function to select entity key', function () {
-
-            const reducer = demux([
-                {_id: 1, enabled: false, data: {}, },
-                {_id: 2, enabled: true, data: {}, },
-                {_id: 3, enabled: false, data: {}, },
-            ], {
-                enabled: node(false)
-                    .on('ENABLE', true)
-                    .on('DISABLE', false)
-            }, {
-                getKey: (state, action) => {
-                    for (let i = 0; i < state.length; i++) {
-                        if (state[i]._id === action.payload.id) { return i }
-                    }
-                }
-            })
-
-            const store = createStore(reducer)
-
-            store.dispatch({ type: 'ENABLE', payload: { id: 3 } })
-            assert.deepStrictEqual(store.getState(), [
-                {_id: 1, enabled: false, data: {}, },
-                {_id: 2, enabled: true, data: {}, },
-                {_id: 3, enabled: true, data: {}, },
-            ])
-        })
-
         it('specifies custom function shorthand to select entity key',
                 function () {
 
@@ -551,6 +468,41 @@ describe('redux-combiner', function () {
             ])
         })
 
+        it('specifies custom function shorthand to select entity key',
+                function () {
+
+            const reducer = node({
+                a: {
+                    b: demux([
+                        {_id: 1, enabled: false, data: {}, },
+                        {_id: 2, enabled: true, data: {}, },
+                        {_id: 3, enabled: false, data: {}, },
+                    ], {
+                        enabled: node(false)
+                            .on('ENABLE', true)
+                            .on('DISABLE', false)
+                    }, function* (state, action) {
+                        for (let i = 0; i < state.length; i++) {
+                            yield i
+                        }
+                    })
+                }
+            })
+
+            const store = createStore(reducer)
+
+            store.dispatch({ type: 'ENABLE' })
+            assert.deepStrictEqual(store.getState(), {
+                a: {
+                    b: [
+                        {_id: 1, enabled: true, data: {}, },
+                        {_id: 2, enabled: true, data: {}, },
+                        {_id: 3, enabled: true, data: {}, },
+                    ]
+                }
+            })
+        })
+
         it('does not call getKey on init', function () {
 
             let callsCount = 0
@@ -563,10 +515,8 @@ describe('redux-combiner', function () {
                 enabled: node(false)
                     .on('ENABLE', true)
                     .on('DISABLE', false)
-            }, {
-                getKey: (state, action) => {
-                    callsCount++
-                }
+            }, (state, action) => {
+                callsCount++
             })
 
             const store = createStore(reducer)
@@ -627,6 +577,44 @@ describe('redux-combiner', function () {
                 { counter: 27 },
                 { counter: 1 },
             ])
+        })
+
+        it('defines several demuxes on a single node', function () {
+
+            const every = function (step, from) {
+                return function* (counters) {
+                    let i = from
+                    yield from
+                    while ((i+=step) < counters.length) { yield i }
+                }
+            }
+
+            const inc = counter => counter + 1
+
+            const reducer = node({
+                counters: demux(
+                    demux(
+                        demux(
+                            [],
+                            node(0).on('INC_2nds', inc),
+                            every(2, 0),
+                        ),
+                        node(0).on('INC_FROM3', inc),
+                        every(1, 3)
+                    ),
+                    node(0).on('INC', inc)
+                ),
+            })
+
+            const store = createStore(reducer, { counters: [ 0, 0, 0, 0, 0 ] })
+
+            store.dispatch({ type: 'INC', index: 0 })
+            store.dispatch({ type: 'INC_2nds' })
+            store.dispatch({ type: 'INC_FROM3' })
+
+            assert.deepStrictEqual(store.getState(), {
+                counters: [ 2, 0, 1, 1, 2 ]
+            })
         })
 
         describe('on method', function () {
