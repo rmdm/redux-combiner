@@ -4,5 +4,5 @@ node_js:
   - "6.1"
   - "4.4"
 
-script: "npm run test"
+script: "npm run ci"
 after_script: "cat ./coverage/lcov.info | coveralls"

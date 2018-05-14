@@ -4,6 +4,7 @@
   "description": "Convenient reducers combiner for Redux",
   "main": "dest/combiner.js",
   "scripts": {
+    "ci": "npm run lint && npm run cover && npm run karma",
     "test": "npm run lint && npm run mocha && npm run karma",
     "lint": "eslint src",
     "mocha": "mocha --recursive --require babel-register test",
