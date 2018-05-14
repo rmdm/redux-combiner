@@ -19,7 +19,7 @@ function initNode (combineReducers) {
 
     return function nodeFn (initial) {
 
-        checkInitial(initial, nodeFn)
+        checkInitial(initial)
 
         const innerReducer = getInnerReducer(initial, combineReducers)
 
@@ -43,12 +43,12 @@ function initDemux (combineReducers) {
 
     return function demuxFn (initial, schema, selector) {
 
-        checkInitial(initial, demuxFn)
+        checkInitial(initial)
 
         const selectChild = createSelector(selector)
         const innerReducer = getInnerReducer(initial, combineReducers)
         const childReducer = getChildReducer(
-                schema, selectChild, combineReducers)
+            schema, selectChild, combineReducers)
 
         const fn = function (state, action) {
 
@@ -71,11 +71,9 @@ function initDemux (combineReducers) {
     }
 }
 
-function checkInitial (initial, frame) {
+function checkInitial (initial) {
     if (typeof initial === 'undefined') {
-        const e = new Error('node must be initialized.')
-        Error.captureStackTrace(e, frame)
-        throw e
+        throw new Error('node must be initialized.')
     }
 }
 
@@ -101,11 +99,11 @@ function getInnerReducer (initial, combineReducers, noWrap) {
     }
 
     const { reducers, defaultReducers } = getInitialStateReducers(
-            initial, combineReducers)
+        initial, combineReducers)
 
     if (reducers) {
         return getInitialInnerReducer(
-                initial, reducers, defaultReducers, combineReducers)
+            initial, reducers, defaultReducers, combineReducers)
     } else {
         return noWrap ? initial : makeActionIdentity(initial)
     }
@@ -121,7 +119,7 @@ function getInitialStateReducers (initial, combineReducers) {
         if (hasOwn(initial, k)) {
 
             const innerReducer =
-                    getInnerReducer(initial[k], combineReducers, true)
+                getInnerReducer(initial[k], combineReducers, true)
 
             if (isFunction(innerReducer)) {
                 hasFn = true
@@ -136,7 +134,7 @@ function getInitialStateReducers (initial, combineReducers) {
 }
 
 function getInitialInnerReducer (
-        initial, reducers, defaultReducers, combineReducers) {
+    initial, reducers, defaultReducers, combineReducers) {
 
     const getDefault = combineReducers(defaultReducers)
 
@@ -184,7 +182,7 @@ function getChildReducer (schema, selectChild, combineReducers) {
         }
 
         const reducers = getStateChildReducers(
-                state, action, selectChild, schemaReducer)
+            state, action, selectChild, schemaReducer)
 
         const reducer = reducers ? combineReducers(reducers) : identity
 
@@ -384,10 +382,6 @@ function makeActionIdentity (initial) {
 
 function identity (data = null) {
     return data
-}
-
-function flatten (arrays) {
-    return Array.prototype.concat.apply([], arrays)
 }
 
 function isObject (obj) {

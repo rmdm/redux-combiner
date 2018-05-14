@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.org/rmdm/redux-combiner.svg?branch=master)](https://travis-ci.org/rmdm/redux-combiner)
+[![Coverage Status](https://coveralls.io/repos/github/rmdm/redux-combiner/badge.svg?branch=master)](https://coveralls.io/github/rmdm/redux-combiner?branch=master)
+
 redux-combiner
 ==============
 

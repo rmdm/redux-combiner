@@ -208,7 +208,7 @@ describe('redux-combiner', function () {
                 function () {
 
             const ACTIONS = Object.getOwnPropertySymbols(node(0))
-                    .find(s => String(s) === 'Symbol(actions)')
+                    .find(s => String(s).indexOf('Symbol(actions)') !== -1)
 
             const nodeA = node(0).on('INC_A', a => a + 1)
             const nodeB = node(0).on('INC_B', b => b + 1)
