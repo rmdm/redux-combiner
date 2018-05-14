@@ -49,6 +49,16 @@ To be efficent, redux-combiner uses information on expected actions of each redu
 
 And that's basically it! As you can see, redux-combiner has really simple yet powerful API which can be further customized. See [docs](#documentation) for more!
 
+## Performance
+
+redux-combiner has quite decent performance, as [js-framework-benchmark shows](https://rawgit.com/krausest/js-framework-benchmark/master/webdriver-ts-results/table.html). It's quite close to bare React version of the benchmark.
+
+## Installation
+
+```sh
+    npm i --save redux-combiner
+```
+
 ## Documentation
 
 ### `combiner ( combineReducers ) -> { node, demux }`
